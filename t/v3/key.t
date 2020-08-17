@@ -198,7 +198,7 @@ timeout/
             local chunk, err = body_chunk_fun()
             ngx.say("value: ", chunk.result.events[1].kv.value)
 
-            local res, err = etcd:watchcancel(http_cli)
+            local res, err = etcd.watchcancel(http_cli)
             if not res then
                 ngx.say("failed to cancel: ", err)
             end
