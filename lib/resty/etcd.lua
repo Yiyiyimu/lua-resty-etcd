@@ -1,10 +1,12 @@
-local etcdv2  = require("resty.etcd.v2")
-local etcdv3  = require("resty.etcd.v3")
-local utils   = require("resty.etcd.utils")
-local typeof  = require("typeof")
-local require = require
-local pcall   = pcall
-local prefix_v3 = {
+local etcdv2      = require("resty.etcd.v2")
+local etcdv3      = require("resty.etcd.v3")
+local utils       = require("resty.etcd.utils")
+local decode_json = require("cjson.safe").decode
+local typeof      = require("typeof")
+local require     = require
+local pcall       = pcall
+local io          = io
+local prefix_v3   = {
     ["3.5."] = "/v3",
     ["3.4."] = "/v3",
     ["3.3."] = "/v3beta",
@@ -13,20 +15,31 @@ local prefix_v3 = {
 
 local _M = {version = 0.9}
 
-
+-- get version without create etcd client
 local function etcd_version(opts)
-    local etcd_obj, err = etcdv2.new(opts)
-    if not etcd_obj then
-        return nil, err
+    local http_host  = opts.http_host
+    if not typeof.string(http_host) and not typeof.table(http_host) then
+        return nil, 'opts.http_host must be string or string array'
+    end
+    if type(http_host) == 'table' then -- multi nodes
+        http_host = http_host[1]
     end
 
-    local ver
-    ver, err = etcd_obj:version()
-    if not ver then
-        return nil, err
+    local cmd = "curl " .. http_host .. "/version"
+    local t, err = io.popen(cmd)
+    if not t then
+        return nil, "failed to get etcd version"
+    end
+    local res = t:read("*all")
+    t:close()
+    
+    if res == "" then
+        return nil, "failed to get etcd version"
     end
 
-    return ver.body
+    res = decode_json(res)
+    
+    return res
 end
 
 local function require_serializer(serializer_name)
@@ -60,7 +73,7 @@ function _M.new(opts)
                 return nil, err
             end
             local sub_ver = ver.etcdserver:sub(1, 4)
-            opts.api_prefix = prefix_v3[sub_ver] or "/v3beta"
+            opts.api_prefix = prefix_v3[sub_ver]
         end
         return etcdv3.new(opts)
     end
